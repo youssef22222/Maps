@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Speed Violation Path</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    html, body { height: 100%; margin: 0; padding: 0; }
+    #map { height: 100%; }
+    .number-icon {
+      background-color: #4285F4;
+      border: 2px solid white;
+      border-radius: 50%;
+      color: white;
+      font-weight: bold;
+      text-align: center;
+      font-size: 12px;
+      line-height: 20px;
+      width: 24px;
+      height: 24px;
+      margin-left: -12px;
+      margin-top: -12px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    }
+    .start-icon {
+      background-color: #00C853;
+    }
+    .end-icon {
+      background-color: #D50000;
+    }
+    .violation-icon {
+      background-color: #FF6F00;
+      width: 30px;
+      height: 30px;
+      line-height: 26px;
+      font-size: 14px;
+    }
+    .popup-content {
+      min-width: 250px;
+    }
+    .popup-content table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .popup-content td {
+      padding: 2px 5px;
+      border-bottom: 1px solid #eee;
+    }
+    .popup-content td:first-child {
+      font-weight: bold;
+      width: 40%;
+    }
+    .speed-ok { color: green; }
+    .speed-violation { color: red; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-polylinedecorator@1.6.0/dist/leaflet.polylineDecorator.js"></script>
+  <script>
+    // Initialize the map
+    var map = L.map('map').setView([26.365472999999998, 50.206430999999995], 14);
+
+    // Add OpenStreetMap tile layer
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    // Define the coordinates
+    var latlngs = [
+      [26.364415, 50.206848],
+      [26.364863, 50.206642],
+      [26.365982, 50.206365],
+      [26.366007, 50.206225],
+      [26.366098, 50.206075]
+    ];
+
+    // Speed data for each point
+    var speedData = [{"time": "06/03/25,11:43:40", "speed": 106, "speed_limit": 30, "street_name": "", "street_name_ar": ""}, {"time": "06/03/25,11:44:22", "speed": 107, "speed_limit": 30, "street_name": "", "street_name_ar": ""}, {"time": "06/03/25,11:44:41", "speed": 119, "speed_limit": 30, "street_name": "", "street_name_ar": ""}, {"time": "06/03/25,11:44:49", "speed": 109, "speed_limit": 40, "street_name": "", "street_name_ar": ""}, {"time": "06/03/25,11:44:58", "speed": 106, "speed_limit": 30, "street_name": "", "street_name_ar": ""}];
+
+    // Draw the polyline (straight lines between points)
+    var polyline = L.polyline(latlngs, {
+      color: 'blue',
+      weight: 4,
+      opacity: 0.6,
+      dashArray: '10, 5'
+    }).addTo(map);
+
+    // Add directional arrows
+    var decorator = L.polylineDecorator(polyline, {
+      patterns: [
+        {
+          offset: 25,
+          repeat: 50,
+          symbol: L.Symbol.arrowHead({
+            pixelSize: 12,
+            polygon: false,
+            pathOptions: {
+              stroke: true,
+              color: 'blue',
+              weight: 2,
+              opacity: 0.8
+            }
+          })
+        }
+      ]
+    }).addTo(map);
+
+    // Function to create numbered div icons
+    function createNumberedIcon(number, extraClass = '') {
+      return L.divIcon({
+        className: 'number-icon ' + extraClass,
+        html: number.toString(),
+        iconSize: [24, 24]
+      });
+    }
+
+    // Function to create popup content
+    function createPopupContent(pointNum, lat, lon, data) {
+      var isViolation = data.speed && data.speed_limit && (data.speed > data.speed_limit);
+      var speedClass = isViolation ? 'speed-violation' : 'speed-ok';
+
+      var html = '<div class="popup-content">';
+      html += '<h4 style="margin: 0 0 5px 0;">Point ' + pointNum + '</h4>';
+      html += '<table>';
+      html += '<tr><td>Latitude:</td><td>' + lat.toFixed(6) + '</td></tr>';
+      html += '<tr><td>Longitude:</td><td>' + lon.toFixed(6) + '</td></tr>';
+
+      if (data.time) {
+        html += '<tr><td>Time:</td><td>' + data.time + '</td></tr>';
+      }
+
+      if (data.street_name_ar) {
+        html += '<tr><td>Street (AR):</td><td style="direction: rtl;">' + data.street_name_ar + '</td></tr>';
+      }
+
+      if (data.street_name) {
+        html += '<tr><td>Street (EN):</td><td>' + data.street_name + '</td></tr>';
+      }
+
+      if (data.speed_limit) {
+        html += '<tr><td>Speed Limit:</td><td>' + data.speed_limit + ' km/h</td></tr>';
+      }
+
+      if (data.speed) {
+        html += '<tr><td>Vehicle Speed:</td><td class="' + speedClass + '">' + data.speed + ' km/h</td></tr>';
+      }
+
+      if (isViolation) {
+        var overSpeed = data.speed - data.speed_limit;
+        html += '<tr><td>Over Speed:</td><td class="speed-violation">+' + overSpeed + ' km/h</td></tr>';
+      }
+
+      html += '</table>';
+      html += '</div>';
+
+      return html;
+    }
+
+    // Add markers for all points
+    for (var i = 0; i < latlngs.length; i++) {
+      var iconClass = '';
+      var icon;
+      var data = speedData[i] || {};
+
+      if (i === 0) {
+        iconClass = 'start-icon';
+        icon = createNumberedIcon('S', iconClass);
+      } else if (i === latlngs.length - 1) {
+        iconClass = 'end-icon';
+        icon = createNumberedIcon('E', iconClass);
+      } else {
+        icon = createNumberedIcon(i + 1);
+      }
+
+      var popupContent = createPopupContent(i + 1, latlngs[i][0], latlngs[i][1], data);
+
+      L.marker(latlngs[i], {icon: icon})
+        .addTo(map)
+        .bindPopup(popupContent);
+    }
+
+    // Add violation marker if provided
+    var violationLat = null;
+    var violationLon = null;
+    var violationDetails = {"time": "2025-06-03 14:44:58", "street_name_ar": "", "street_name": "", "speed_limit": 30, "speed": 106};
+
+    if (violationLat && violationLon) {
+      var lastPoint = latlngs[latlngs.length - 1];
+      if (Math.abs(lastPoint[0] - violationLat) > 0.0001 || Math.abs(lastPoint[1] - violationLon) > 0.0001) {
+        var violationPopup = createPopupContent('Violation', violationLat, violationLon, violationDetails);
+
+        L.marker([violationLat, violationLon], {
+          icon: createNumberedIcon('V', 'violation-icon')
+        })
+        .addTo(map)
+        .bindPopup(violationPopup);
+      }
+    }
+
+    // Fit the map to show all points
+    map.fitBounds(polyline.getBounds().pad(0.1));
+
+    // Add a legend
+    var legend = L.control({position: 'bottomright'});
+    legend.onAdd = function (map) {
+      var div = L.DomUtil.create('div', 'legend');
+      div.style.background = 'white';
+      div.style.padding = '10px';
+      div.style.border = '2px solid #ccc';
+      div.style.borderRadius = '5px';
+      div.style.fontSize = '12px';
+      div.innerHTML = '<h4 style="margin: 0 0 5px 0;">Legend</h4>' +
+                      '<p style="margin: 2px 0;"><span style="color: #00C853; font-weight: bold;">S</span> Start Point</p>' +
+                      '<p style="margin: 2px 0;"><span style="color: #D50000; font-weight: bold;">E</span> End Point</p>' +
+                      '<p style="margin: 2px 0;"><span style="color: #4285F4; font-weight: bold;">1-9</span> Path Points</p>' +
+                      '<p style="margin: 2px 0;"><span style="color: #FF6F00; font-weight: bold;">V</span> Violation Location</p>' +
+                      '<p style="margin: 2px 0;"><span style="color: blue;">- - →</span> Vehicle Path</p>' +
+                      '<hr style="margin: 5px 0;">' +
+                      '<p style="margin: 2px 0; font-style: italic; font-size: 11px;">Note: Lines show direct paths<br>between GPS points, not<br>actual street routes.</p>';
+      return div;
+    };
+    legend.addTo(map);
+
+    // Add info control
+    var info = L.control({position: 'topleft'});
+    info.onAdd = function (map) {
+      var div = L.DomUtil.create('div', 'info');
+      div.style.background = 'rgba(255,255,255,0.9)';
+      div.style.padding = '8px';
+      div.style.border = '2px solid #ccc';
+      div.style.borderRadius = '5px';
+      div.style.fontSize = '14px';
+
+      var violationCount = 0;
+      for (var i = 0; i < speedData.length; i++) {
+        if (speedData[i].speed && speedData[i].speed_limit && speedData[i].speed > speedData[i].speed_limit) {
+          violationCount++;
+        }
+      }
+
+      div.innerHTML = '<b>Total Points:</b> ' + latlngs.length + '<br>' +
+                      '<b>Violations:</b> ' + violationCount;
+      return div;
+    };
+    info.addTo(map);
+  </script>
+</body>
+</html>
